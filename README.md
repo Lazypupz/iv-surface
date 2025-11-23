@@ -33,14 +33,9 @@ Displays implied volatilty surface (and skew) of option chains from tickers FROM
    cd implied-volatility
    ```
 
-2. Install dependencies with Poetry:
+2. Install dependicies:
    ```bash
-   poetry install
-   ```
-
-3. Activate the virtual environment:
-   ```bash
-   poetry shell
+   pip install -r requirements.txt
    ```
 
 ## Running the App
@@ -74,7 +69,8 @@ implied-volatility/ ## a cd jungle, nested folder with the same name as (grand)p
 │   ├── plot.py           # Plotting functions
 │   └── __pycache__/
 ├── tests/                # tests lol
-├── pyproject.toml        # Poetry configuration
+├── requirements.txt
+├── .gitignore
 └── README.md
 ```
 
