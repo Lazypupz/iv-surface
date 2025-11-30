@@ -1,40 +1,51 @@
 import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
+import numpy as np
+from scipy.interpolate import griddata
 
 
 def _normalize_df(df):
-    """Ensure expiry is date type and daystoexpiry is numeric type."""
     df = df.copy()
-    if "expiry" in df.columns:
-        df["expiry"] = pd.to_datetime(df["expiry"]).dt.date
-    if "daystoexpiry" in df.columns:
-        df["daystoexpiry"] = pd.to_numeric(df["daystoexpiry"], errors="coerce")
+    df["impliedVolatility"] = pd.to_numeric(df["impliedVolatility"], errors='coerce')
+    df = df.dropna(subset=["impliedVolatility", "strike", "T"])
+    df = df[(df["impliedVolatility"] > 0.01) & (df["impliedVolatility"] < 3.0)]
     return df
 
-def create_3d_surface(df, option_type, selected_expiry=None):
+def create_3d_surface(df, option_type):
 
-    if df["expiry"].nunique() > 1 and df["strike"].nunique() > 1:
-        pivot = df.pivot_table(index="strike", columns='daystoexpiry', values="impliedVolatility")
-        pivot = pivot.dropna(how="all", axis=0).dropna(how="all", axis=0)
+    if df.empty or df.shape[0] < 4:
+        st.info("Not enough option data available to create a 3D surface.")
+        return
 
-        if pivot.shape[0] >= 2 and pivot.shape[1] >= 2:
-            x = pivot.columns.values  # days to expiry
-            y = pivot.index.values  # strike prices
-            z = pivot.values      # implied volatilities
+    df = df.dropna(subset=["strike", "T", "impliedVolatility"])
 
-            surface = go.Figure(data=[go.Surface(z=z, x=x, y=y)])
-            surface.update_layout(title=f"Implied Volatility Surface ({option_type})", autosize=False, width=800, height=800,
-                                scene=dict(xaxis_title="Days to Expiration",
-                                            yaxis_title="Strike Price",
-                                            zaxis_title="Implied Volatility"))
-            st.plotly_chart(surface, use_container_width=True)
-        else:
-            st.info("Not enough grid points across expirations and strikes to make a 3d surface")
-    else:
-        st.warning("Not enough expirations available for this ticker.")
+    points = df[["T", "strike"]].values      
+    values = df["impliedVolatility"].values
 
-    return surface
+    strike_grid = np.linspace(df["strike"].min(), df["strike"].max(), 50)
+    T_grid = np.linspace(df["T"].min(), df["T"].max(), 50)
+    X, Y = np.meshgrid(strike_grid, T_grid)
+
+    Z = griddata(points, values, (X, Y), method="cubic")
+
+    nan_mask = np.isnan(Z)
+    if nan_mask.any():
+        Z[nan_mask] = griddata(points, values, (X[nan_mask], Y[nan_mask]), method="nearest")
+
+    surface = go.Figure(data=[go.Surface(z=Z, x=X, y=Y, colorscale='Viridis')])
+    surface.update_layout(title=f"({option_type}) Implied Volatility Surface", 
+                          autosize=True,
+                          width = 800,
+                          height = 800,
+                          scene=dict(
+                                xaxis_title="Strike Price",
+                                yaxis_title="Time to Expiry (in years)",
+                                zaxis_title="Implied Volatility",
+    ))
+
+    st.plotly_chart(surface, use_container_width=True)
+    print(df["impliedVolatility"].describe())
 
 def make_skew_plot(df, option_type, selected_expiry):
     skew_df = df[["strike", "impliedVolatility"]].dropna()
@@ -61,7 +72,7 @@ def plot_graph(df, option_type, selected_expiry):
         return
     
     if selected_expiry is None:
-        create_3d_surface(df, option_type, selected_expiry)
+        create_3d_surface(df, option_type)
     else:
         skew_fig = make_skew_plot(df, option_type, selected_expiry)
         if skew_fig:

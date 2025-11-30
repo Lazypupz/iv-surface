@@ -15,63 +15,49 @@ def check_ticker_input(ticker):
         return False, None
 
 def option_chains(st_ticker, expiry):
-    chains = pd.DataFrame()
 
-    calls = st_ticker.option_chain(expiry).calls
-    calls["optionType"] = "call"
-
-    puts = st_ticker.option_chain(expiry).puts
-    puts["optionType"] = "put"
-
-    chain = pd.concat([calls, puts])
-    chain["expiry"] = pd.to_datetime(expiry)
-
-    chains = pd.concat([chains, chain])
-    chains["daystoexpiry"] = (chains["expiry"] - pd.Timestamp.now()).dt.days
-    return chains
-
-
-def gather_recent_option_call(st_ticker, expiry):
-    
     try:
+        calls = st_ticker.option_chain(expiry).calls
+        calls["optionType"] = "call"
 
-        chains = option_chains(st_ticker, expiry)
+        puts = st_ticker.option_chain(expiry).puts
+        puts["optionType"] = "put"
 
-        if expiry is None:
-            st.sidebar.error("No expiry date selected.")
-            return None
+        chain = pd.concat([calls, puts], ignore_index=True)
+    except Exception:
+        return pd.DataFrame()
 
-        hist = st_ticker.history(period="5d")
-        if hist.empty:
-            raise ValueError("No historical data found for this ticker.")
-            return None 
-        spotprice = hist['Close'].iloc[-1]
+    chain["expiry"] = pd.to_datetime(expiry)
+    now = pd.Timestamp.utcnow().replace(tzinfo=None)
+    chain["T"] = (chain["expiry"] - now).dt.total_seconds() / (365 * 24 * 3600)
 
-        calls = chains[chains["optionType"] == 'call']
-        if calls.empty:
-            st.sidebar.error('This ticker does not have call options data.') 
-            return None
-        call_strikeprice = calls['strike'].iloc[0]
+    chain["mid"] = (chain["bid"] + chain["ask"]) / 2.0
+    chain["spread"] = (chain["ask"] - chain["bid"])
 
-        puts = chains[chains["optionType"] == 'put']
-        if puts.empty:
-            st.sidebar.error('This ticker does not have put options data.') 
-            return None
-        put_strikeprice = puts["strike"].iloc[0]
+    return chain
 
-        expiry_date = datetime.strptime(expiry, '%Y-%m-%d').date()
-        today = datetime.now().date()
-        time_until_expiry = (expiry_date - today).days / 252
+def clean_chain(df):
+    """Remove illiquid/Useless Strikes."""
 
-        risk_free_rate = 0.01 ##static 1% for now
+    if df.empty:
+        return df
 
-        return spotprice, call_strikeprice, put_strikeprice, time_until_expiry, risk_free_rate, puts, calls
-    except (IndexError, KeyError, ValueError, AttributeError) as e:
-        st.sidebar.error(f"Error fetching options data: {e}") 
-        return None
+    df = df.copy()
+
+    # Remove bad prices
+    df = df.dropna(subset=["bid", "ask", "mid"])
+
+    df = df[df["mid"] > 0]                         # mid must be positive
+    df = df[df["spread"] / df["mid"] < 0.25]       # 25% max spread
+    df = df[df["T"] > 0]                           # no expired contracts
+
+    if df["strike"].nunique() < 10:
+        return pd.DataFrame()
+
+    return df
+
 
 def fetch_data(ticker, expiry=None):
-
 
     if not ticker:
         st.sidebar.error("Ticker not provided.")
@@ -81,43 +67,51 @@ def fetch_data(ticker, expiry=None):
     if not valid:
         return None
 
-    if expiry is None: ## all expiries is selected
-        available_expiries = st_ticker.options
-        if not available_expiries:
-            st.sidebar.error("No expirations available for this ticker.")
-            return None
-        
-        all_calls = pd.DataFrame()
-        all_puts = pd.DataFrame()
-        
-        for exp in available_expiries:
-            try:
-                chain = option_chains(st_ticker, exp)
-                calls = chain[chain["optionType"] == 'call']
-                puts = chain[chain["optionType"] == 'put']
-                all_calls = pd.concat([all_calls, calls], ignore_index=True)
-                all_puts = pd.concat([all_puts, puts], ignore_index=True)
-            except Exception as e:
-                continue
-        
-        if all_calls.empty or all_puts.empty:
-            st.sidebar.error("No options data found across available expirations.")
-            return None
-        
-        hist = st_ticker.history(period="20d")
-        if hist.empty:
-            st.sidebar.error("No historical data found for this ticker.")
-            return None
-        spotprice = hist['Close'].iloc[-1]
-        
-        return spotprice, None, None, None, 0.01, all_puts, all_calls
-    else:
-        # Fetch data for a specific expiry
-        option_data = gather_recent_option_call(st_ticker, expiry)
-        if option_data is None:
-            return None
-        return option_data
+    hist = st_ticker.history(period="5d")
+    if hist.empty:
+        st.sidebar.error("No historical data found for ticker")
+        return None
+    spot = hist["Close"].iloc[-1]
 
+    risk_free_rate = 0.01
+
+    if expiry:
+        chain = option_chains(st_ticker, expiry)
+        chain = clean_chain(chain)
+
+        if chain.empty:
+            st.sidebar.error("No usable options for this expiry")
+            return None
+
+        return {
+            "spot": spot,
+            "r": risk_free_rate,
+            "chain": chain
+        }
+
+    all_expiries = st_ticker.options
+    if not all_expiries:
+        st.sidebar.error("No expiries available")
+        return None
+
+    frames = []
+    for exp in all_expiries:
+        df = option_chains(st_ticker, exp)
+        df = clean_chain(df)
+        if not df.empty:
+            frames.append(df)
+
+    if not frames:
+        st.sidebar.error("No usable expiries found")
+        return None
+
+    all_chains = pd.concat(frames, ignore_index=True)
+
+    return {
+        "spot": spot,
+        "r": risk_free_rate,
+        "chain": all_chains
+    }
 
 
 

@@ -46,5 +46,3 @@ def init_streamlit():
     st.write("This app calculates the implied volatility of options using the Black-Scholes model. And visualizes the volatility surface.")
 
     st.sidebar.header("User Input Parameters")
-
-

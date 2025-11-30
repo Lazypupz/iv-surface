@@ -40,14 +40,20 @@ def main():
         option_data = fd.fetch_data(st.session_state["ticker"], selected_expiry)
         option_type = st.session_state.get("option_type")
 
-        if option_data is not None and option_type == "call":
-            spotprice, call_strikeprice, put_strikeprice, time_until_expiry, risk_free_rate, puts, calls = option_data
+        if option_data is not None:
+            df_chain = option_data["chain"]
 
-            pl.plot_graph(calls, option_type, selected_expiry)
-        elif option_data is not None and option_type == "put":
-            spotprice, call_strikeprice, put_strikeprice, time_until_expiry, risk_free_rate, puts, calls = option_data
 
-            pl.plot_graph(puts, option_type, selected_expiry)
+            option_type = st.session_state.get("option_type")
+            if option_type == "call":
+                df_filtered = df_chain[df_chain["optionType"]=="call"]
+            elif option_type == "put":
+                df_filtered = df_chain[df_chain["optionType"]=="put"]
+            else:
+                df_filtered = df_chain
+
+        pl.plot_graph(df_filtered, option_type, selected_expiry)
+
 
 if __name__ == "__main__":
     main()
