@@ -23,8 +23,10 @@ Displays implied volatilty surface (and skew) of option chains from tickers FROM
 
 ### Prerequisites
 
-- Python 3.8+
-- [Poetry](https://python-poetry.org/) for dependency management
+- Python 3.9+
+- ```bash
+   pip install -r requirements.txt
+  ```
 
 ### Installation
 
