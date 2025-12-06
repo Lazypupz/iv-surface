@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
 import numpy as np
+import data_clean as dc
 from scipy.interpolate import griddata
 
 
@@ -13,28 +14,18 @@ def _normalize_df(df):
     return df
 
 def create_3d_surface(df, option_type):
+    df, X, Y, Z, points, values = dc.cleanAndProcess_option_data(df=None)
+    if df.empty and df.shape[0] < 4:
+        st.info("Not enuf data bruv")
+        return df
 
-    if df.empty or df.shape[0] < 4:
-        st.info("Not enough option data available to create a 3D surface.")
-        return
-
-    df = df.dropna(subset=["strike", "T", "impliedVolatility"])
-
-    points = df[["T", "strike"]].values      
-    values = df["impliedVolatility"].values
-
-    strike_grid = np.linspace(df["strike"].min(), df["strike"].max(), 50)
-    T_grid = np.linspace(df["T"].min(), df["T"].max(), 50)
-    X, Y = np.meshgrid(strike_grid, T_grid)
-
-    Z = griddata(points, values, (X, Y), method="cubic")
 
     nan_mask = np.isnan(Z)
     if nan_mask.any():
         Z[nan_mask] = griddata(points, values, (X[nan_mask], Y[nan_mask]), method="nearest")
 
-    surface = go.Figure(data=[go.Surface(z=Z, x=X, y=Y, colorscale='Viridis')])
-    surface.update_layout(title=f"({option_type}) Implied Volatility Surface", 
+    surface = go.Figure(data=[go.Surface(z=Z, x=X, y=Y, colorscale="Earth")]) #Blackbody,Bluered,Blues,Cividis,Earth,Electric,Greens,Greys,Hot, # for colorscale options see https://plotly.com/python/colorscales/
+    surface.update_layout(title=f"({option_type}) Implied Volatility Surface",  #Jet,Picnic,Portland,Rainbow,RdBu,Reds,Viridis,YlGnBu,YlOrRd.
                           autosize=True,
                           width = 800,
                           height = 800,
@@ -45,7 +36,8 @@ def create_3d_surface(df, option_type):
     ))
 
     st.plotly_chart(surface, use_container_width=True)
-    print(df["impliedVolatility"].describe())
+    print(df.groupby("T")["impliedVolatility"].describe())
+
 
 def make_skew_plot(df, option_type, selected_expiry):
     skew_df = df[["strike", "impliedVolatility"]].dropna()
