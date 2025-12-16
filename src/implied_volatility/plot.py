@@ -5,6 +5,7 @@ import numpy as np
 import data_clean as dc
 from scipy.interpolate import griddata
 
+MIN_STRIKES_PER_EXPIRY = 8
 
 def _normalize_df(df):
     df = df.copy()
@@ -14,15 +15,57 @@ def _normalize_df(df):
     return df
 
 def create_3d_surface(df, option_type):
-    df, X, Y, Z, points, values = dc.cleanAndProcess_option_data(df=None)
-    if df.empty and df.shape[0] < 4:
-        st.info("Not enuf data bruv")
-        return df
 
+    df = df.dropna(subset=["impliedVolatility", "strike", "T"])
+    df = df[np.isfinite(df["impliedVolatility"])]
+    df = df[(df["impliedVolatility"] > 0.05) & (df["impliedVolatility"] < 2.5)]
+    df["T"] = df["T"].round(6)
 
+    #filtering out the expiries with less than 8 strikes.
+    expiry_counts = df.groupby("T")["strike"].count()
+    if df["T"].nunique() > 1:
+        liquid_expiries = expiry_counts[expiry_counts >= MIN_STRIKES_PER_EXPIRY].index
+        df = df[df["T"].isin(liquid_expiries)]
+
+    points = df[["strike", "T"]].values
+    values = df["impliedVolatility"].values
+
+    #removing all IV's that are above 2.5. Due to the fact that 
+    strike_grid = np.linspace(df["strike"].min(), df["strike"].max(), 50)
+    T_grid = np.linspace(df["T"].min(), df["T"].max(), 50)
+    X, Y = np.meshgrid(strike_grid, T_grid)
+    
+    Z = griddata(points, values, (X, Y), method="nearest")
     nan_mask = np.isnan(Z)
     if nan_mask.any():
-        Z[nan_mask] = griddata(points, values, (X[nan_mask], Y[nan_mask]), method="nearest")
+        #filter bad input points
+        finite_points = (
+            np.isfinite(points[:, 0]) & np.isfinite(points[:, 1]) & np.isfinite(values)
+        )
+
+        points_finite = points[finite_points]
+        values_finite = values[finite_points]
+
+        if len(points_finite) == 0:
+            return  
+        
+        interp_mask = (
+            nan_mask & np.isfinite(X) & np.isfinite(Y)
+        )
+
+        Z[interp_mask] = griddata(
+            points_finite,
+            values_finite,
+            (X[interp_mask], Y[interp_mask]),
+            method="nearest"
+        )
+
+    Z = np.clip(Z, 0.05, 2.5)
+    print("Z finite:", np.isfinite(Z).sum())
+    print("Z shape:", Z.shape)
+    print("X shape:", X.shape)
+    print("Y shape:", Y.shape)
+    print("Z min/max:", np.nanmin(Z), np.nanmax(Z))
 
     surface = go.Figure(data=[go.Surface(z=Z, x=X, y=Y, colorscale="Earth")]) #Blackbody,Bluered,Blues,Cividis,Earth,Electric,Greens,Greys,Hot, # for colorscale options see https://plotly.com/python/colorscales/
     surface.update_layout(title=f"({option_type}) Implied Volatility Surface",  #Jet,Picnic,Portland,Rainbow,RdBu,Reds,Viridis,YlGnBu,YlOrRd.
@@ -35,7 +78,7 @@ def create_3d_surface(df, option_type):
                                 zaxis_title="Implied Volatility",
     ))
 
-    st.plotly_chart(surface, use_container_width=True)
+    st.plotly_chart(surface)
     print(df.groupby("T")["impliedVolatility"].describe())
 
 
