@@ -1,7 +1,6 @@
 # Implied Volatility Surface
 
-hobby project after reading paul wilmott intro to quant finance. threw this together on a week-end and sold my exams. 2nd python ,project production level ofc. 
-whats _pycache_ btw???
+toy project after reading paul wilmott intro to quant finance
 
 **Status:** still lots TODO
 
@@ -24,9 +23,6 @@ Displays implied volatilty surface (and skew) of option chains from tickers FROM
 ### Prerequisites
 
 - Python 3.9+
-- ```bash
-   pip install -r requirements.txt
-  ```
 
 ### Installation
 
