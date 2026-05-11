@@ -1,7 +1,7 @@
 # Implied Volatility Surface
 
 hobby project after reading paul wilmott intro to quant finance. threw this together on a week-end.
-(image.png)
+[!example](image.png)
 
 ### Prerequisites
 
