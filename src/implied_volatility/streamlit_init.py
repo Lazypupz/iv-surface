@@ -10,7 +10,7 @@ class Sidebar:
     
     def find_ticker(self):
         st.sidebar.header("Select Ticker")
-        ticker = st.sidebar.text_input("Ticker", "AAPL", key="sidebar_ticker_input")
+        ticker = st.sidebar.text_input("Ticker", "AAPL",key="sidebar_ticker_input")
         isSubmitPressed = st.sidebar.button("Submit", key="sidebar_ticker_submit")
 
         if isSubmitPressed:
@@ -43,6 +43,6 @@ class Sidebar:
 
 def init_streamlit():
     st.title("Implied Volatility Surface")
-    st.write("This app calculates the implied volatility of options using the Black-Scholes model. And visualizes the volatility surface.")
+    st.write("This app visualises the implited volatility for stocks.")
 
     st.sidebar.header("User Input Parameters")

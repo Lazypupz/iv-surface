@@ -12,6 +12,7 @@ def _normalize_df(df):
     df["impliedVolatility"] = pd.to_numeric(df["impliedVolatility"], errors='coerce')
     df = df.dropna(subset=["impliedVolatility", "strike", "T"])
     df = df[(df["impliedVolatility"] > 0.01) & (df["impliedVolatility"] < 3.0)]
+
     return df
 
 def create_3d_surface(df, option_type):
@@ -35,7 +36,7 @@ def create_3d_surface(df, option_type):
     T_grid = np.linspace(df["T"].min(), df["T"].max(), 50)
     X, Y = np.meshgrid(strike_grid, T_grid)
     
-    Z = griddata(points, values, (X, Y), method="nearest")
+    Z = griddata(points, values, (X, Y), method="linear")
     nan_mask = np.isnan(Z)
     if nan_mask.any():
         #filter bad input points
@@ -67,7 +68,7 @@ def create_3d_surface(df, option_type):
     print("Y shape:", Y.shape)
     print("Z min/max:", np.nanmin(Z), np.nanmax(Z))
 
-    surface = go.Figure(data=[go.Surface(z=Z, x=X, y=Y, colorscale="Earth")]) #Blackbody,Bluered,Blues,Cividis,Earth,Electric,Greens,Greys,Hot, # for colorscale options see https://plotly.com/python/colorscales/
+    surface = go.Figure(data=[go.Surface(z=Z, x=X, y=Y, colorscale="Portland")]) #Blackbody,Bluered,Blues,Cividis,Earth,Electric,Greens,Greys,Hot, # for colorscale options see https://plotly.com/python/colorscales/
     surface.update_layout(title=f"({option_type}) Implied Volatility Surface",  #Jet,Picnic,Portland,Rainbow,RdBu,Reds,Viridis,YlGnBu,YlOrRd.
                           autosize=True,
                           width = 800,
@@ -93,7 +94,7 @@ def make_skew_plot(df, option_type, selected_expiry):
     skew_fig = go.Figure()
     skew_fig.add_trace(go.Scatter(x=skew_df['strike'], y=skew_df["impliedVolatility"],
                             mode='lines+markers', name='IV'))
-    title = f'({option_type}) IV Skew for {selected_expiry}' if selected_expiry is not None else 'Call IV Skew'
+    title = f"({option_type}) IV Skew for {selected_expiry}" if selected_expiry is not None else "Call IV Skew"
     skew_fig.update_layout(title=title, xaxis_title='Strike', yaxis_title="impliedVolatility")
 
     return skew_fig
